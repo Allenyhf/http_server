@@ -6,35 +6,42 @@
 #include <queue>
 #include <string.h>
 #include <stdio.h>
-#define THREAD_NUM 8
+// #include "LockGuard.hpp"
+#define THREAD_NUM 32
+template<typename T>
+class ThreadPool;
 
 template<typename T>
 class ThreadPool{
     private:
         int num;
         pthread_t threads[THREAD_NUM];
+        // std::vector<pthread_t> threads;
+        // pthread_t *threads;
         pthread_cond_t cond;
-        pthread_mutex_t mutex;
-        std::queue<T> task_queue;
+        pthread_mutex_t mut;
+        std::queue<T*> task_queue;
 
         void Lock() {
-            if (0!=pthread_mutex_lock(&mutex)) {
+            if (0!=pthread_mutex_lock(&mut)) {
                 printf("fail to Lock!\n");
             }
+            printf("locked!\n");
         }
 
         void Unlock() {
-            if (0!=pthread_mutex_unlock(&mutex)) {
+            if (0!=pthread_mutex_unlock(&mut)) {
                 printf("fail to Unlock!\n");
             }
+            printf("unlocked!\n");
         }
 
         void Wait() {
-            pthread_cond_wait(&cond, &mutex);
+            pthread_cond_wait(&cond, &mut);
         }
 
         void Signal() {
-            printf("signal...\n");
+            // printf("signal...\n");
             pthread_cond_signal(&cond);
         }
 
@@ -48,35 +55,43 @@ class ThreadPool{
                 if (ret!=0) {
                     printf("pthread_join error: %s\n", strerror(ret));
                 }
-            }
-            
+            }    
         }
+
     public:
         ThreadPool(int n=THREAD_NUM):num(n) {
+            // threads = (pthread_t*)malloc(n*sizeof(pthread_t));
+            // memset(threads, 0, sizeof(pthread_t)*n);
             pthread_cond_init(&cond, NULL);
-            // pthread_mutex_init(&mutex, NULL);
-            mutex = PTHREAD_MUTEX_INITIALIZER;
+            // pthread_mutexattr_init(&mutattr);
+            // pthread_mutexattr_settype(&mutattr, PTHREAD_MUTEX_ERRORCHECK);
+            pthread_mutex_init(&mut, NULL);
+            // mutex = PTHREAD_MUTEX_INITIALIZER;
         }
         
         ~ThreadPool() {
             stop();
             pthread_cond_destroy(&cond);
-            pthread_mutex_destroy(&mutex);
+            pthread_mutex_destroy(&mut);
         }
 
-        void addTask(T task) {
+        void addTask(T* task) {
             printf("add Task...\n");
             Lock();
-            printf("push ");
+            // LockGuard lg(&mutex);
+            // printf("push ");
             task_queue.push(task);
-            printf("Task..\n");
-            Unlock();
+            // printf("Task..\n");
             Signal();
+            Unlock();
+            // Broadcast();
             printf("****\n");
         }
 
         void Init() {
+            // pthread_t pt;
             for (int k=0; k<num; k++) {
+                // threads.push_back(pthread_t());
                 int ret = pthread_create(&threads[k], NULL, run, this);
                 if (0!=ret) {
                     printf("fail to pthread_create: %s\n", strerror(ret));
@@ -91,11 +106,23 @@ class ThreadPool{
                 while (p_threadpool->task_queue.empty())
                     p_threadpool->Wait();
                 printf("pppp\n");
-                T task = p_threadpool->task_queue.front();
+                T* task = p_threadpool->task_queue.front();
                 p_threadpool->task_queue.pop();
                 p_threadpool->Unlock();
                 printf("peek one Task...\n");
-                task();
+                (*task)();
+                // T* task = nullptr;
+                // {
+                //     LockGuard lg(&(p_threadpool->mutex));
+                //     while (p_threadpool->task_queue.empty()) {
+                //         p_threadpool->Wait();
+                //     }
+                //     printf("pppp\n");
+                //     task = &(p_threadpool->task_queue.front());
+                //     p_threadpool->task_queue.pop();
+                //     printf("peek one Task...\n");
+                // }
+                // (*task)();
             }
         }
 };

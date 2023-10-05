@@ -6,6 +6,7 @@
 #include <string>
 #include "sys/stat.h"
 #include <sys/mman.h>
+#include <errno.h>
 
 #define BUFSIZE       4096
 #define PATH_SIZE     1024
@@ -234,18 +235,20 @@ class HttpRequest{
             parse_ptr    =  recv_buf;
             bufsize_left =  BUFSIZE;
             state        =  PARSE_REQUESTLINE;
-            // printf("%p~~~%p\n", recv_buf, recv_buf+BUFSIZE);
+            printf("%p~~~%p %d\n", recv_buf, recv_buf+BUFSIZE, sock);
             memset(recv_buf, 0, sizeof(recv_buf));
             while (1) {
                 int nr = recv(sock, recv_ptr, bufsize_left, 0);
                 if (nr==-1) {
+                    printf("243\n");
                     // close(sock);
                     return -1;
                 } else if (nr==0){
+                    printf("247\n");
                     // close(sock);
                     return -1;
                 } else if (nr>0){
-                    // printf("%s~\n", recv_ptr);
+                    printf("%s~\n", recv_ptr);
                     bufsize_left -= nr;
                     recv_ptr += nr;
                     int ret = parse();
@@ -407,7 +410,7 @@ class EndPoint{
         printf("======\n");
         int req_file_fd = open(req_file_path, O_RDONLY);
         if (req_file_fd<0) {
-            printf("fail to open request file!\n");
+            printf("fail to open request file: %s!\n", req_file_path);
             return -1;
         }    
         req_file_addr = (char*)mmap(0, req_file_size, PROT_READ, MAP_PRIVATE, req_file_fd, 0);
@@ -435,23 +438,23 @@ int Epoll_mod_out(int fd) {
 }
 
 class Task{
-    int _sock;
+    public: int msock;
   private:
     CallBack callback;
 
   public:
-    Task(){
-
+    Task(): msock(0){
     }
+    
     void init(int fd) {
-        _sock = fd;
+        msock = fd;
     }    
+
     int operator()() {
-        // _sock = sock;
         printf("()...\n");
-        int ret = callback(_sock);
-        if (-1==Epoll_mod_out(_sock)) {
-            printf("fail to add client_fd OUT!\n");
+        int ret = callback(msock);
+        if (-1==Epoll_mod_out(msock)) {
+            printf("fail to add client_fd OUT: %s!\n", strerror(errno));
         }
         return ret;
     }
@@ -472,13 +475,13 @@ class Task{
     }
 
     void write() {
-        printf("write sock:%d\n", _sock);
-        if (-1==Send(_sock, send_buf, strlen(send_buf), 0)) {
+        printf("write sock:%d\n", msock);
+        if (-1==Send(msock, send_buf, strlen(send_buf), 0)) {
             printf("fail to send http response!\n");
             return;
         }
 
-        if (-1==Send(_sock, req_file_addr, req_file_size, 0)) {
+        if (-1==Send(msock, req_file_addr, req_file_size, 0)) {
             printf("fail to send request file!\n");
             return;
         }

@@ -1,6 +1,7 @@
 
 CC = g++
-CFLAGS = -Wall
+CFLAGS = -Wall -g
+
 LDFLAGS = -lpthread
 
 BUILD_DIR = build
@@ -8,7 +9,7 @@ BUILD_DIR = build
 SRCS = $(wildcard *.cc)
 OBJS = $(SRCS:%.c=$(BUILD_DIR)/%.o)
 
-TARGET = http_server
+TARGET = http_server 
 
 all: $(TARGET)
 

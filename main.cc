@@ -121,6 +121,7 @@ int main(int argc, char** argv) {
     ThreadPool<Task> threadpool(16);
     threadpool.Init();
     printf("http server start running...\n");
+
     while (1) {
         int nfds = epoll_wait(epollfd, events, MAX_EVENTS, -1);
         if (nfds==-1) {
@@ -160,7 +161,8 @@ int main(int argc, char** argv) {
                 } else {
                     printf("sockfd: %d can be read!\n", sockfd);
                     if (sockfd>0 && sockfd<MAX_EVENTS) {
-                        threadpool.addTask(tasks[sockfd]);
+                        printf("msock is %d!\n", tasks[sockfd].msock);
+                        threadpool.addTask(&tasks[sockfd]);
                         // if (-1==tasks[sockfd]()) {
                         //     printf("close one client\n");
                         //     // close(sockfd);
