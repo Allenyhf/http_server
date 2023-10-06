@@ -7,17 +7,14 @@
 #include <string.h>
 #include <stdio.h>
 // #include "LockGuard.hpp"
+
 #define THREAD_NUM 32
-template<typename T>
-class ThreadPool;
 
 template<typename T>
 class ThreadPool{
     private:
         int num;
         pthread_t threads[THREAD_NUM];
-        // std::vector<pthread_t> threads;
-        // pthread_t *threads;
         pthread_cond_t cond;
         pthread_mutex_t mut;
         std::queue<T*> task_queue;
@@ -26,14 +23,14 @@ class ThreadPool{
             if (0!=pthread_mutex_lock(&mut)) {
                 printf("fail to Lock!\n");
             }
-            printf("locked!\n");
+            // printf("locked!\n");
         }
 
         void Unlock() {
             if (0!=pthread_mutex_unlock(&mut)) {
                 printf("fail to Unlock!\n");
             }
-            printf("unlocked!\n");
+            // printf("unlocked!\n");
         }
 
         void Wait() {
@@ -60,8 +57,6 @@ class ThreadPool{
 
     public:
         ThreadPool(int n=THREAD_NUM):num(n) {
-            // threads = (pthread_t*)malloc(n*sizeof(pthread_t));
-            // memset(threads, 0, sizeof(pthread_t)*n);
             pthread_cond_init(&cond, NULL);
             // pthread_mutexattr_init(&mutattr);
             // pthread_mutexattr_settype(&mutattr, PTHREAD_MUTEX_ERRORCHECK);
@@ -76,7 +71,7 @@ class ThreadPool{
         }
 
         void addTask(T* task) {
-            printf("add Task...\n");
+            // printf("add Task...\n");
             Lock();
             // LockGuard lg(&mutex);
             // printf("push ");
@@ -84,14 +79,10 @@ class ThreadPool{
             // printf("Task..\n");
             Signal();
             Unlock();
-            // Broadcast();
-            printf("****\n");
         }
 
         void Init() {
-            // pthread_t pt;
             for (int k=0; k<num; k++) {
-                // threads.push_back(pthread_t());
                 int ret = pthread_create(&threads[k], NULL, run, this);
                 if (0!=ret) {
                     printf("fail to pthread_create: %s\n", strerror(ret));
@@ -105,7 +96,6 @@ class ThreadPool{
                 p_threadpool->Lock();
                 while (p_threadpool->task_queue.empty())
                     p_threadpool->Wait();
-                printf("pppp\n");
                 T* task = p_threadpool->task_queue.front();
                 p_threadpool->task_queue.pop();
                 p_threadpool->Unlock();

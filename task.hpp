@@ -106,14 +106,12 @@ class HttpRequest{
                 {
                     // check if line is complete
                     char* end = strpbrk(parse_ptr,"\r\n");
-                    // printf("%c\n", *(end));
                     if (end==NULL) return -1;
                     // parse request method
                     char* pos = strchr(parse_ptr,' ');
                     if (pos==NULL) {
                         status_code = STATUS_CODE_BAD_REQ;
                         status_msg  = STATUS_MSG_BAD_REQ;
-                        // set_file_path(bad_req_html);
                         return -2;
                     }
                     method = parse_ptr;
@@ -122,7 +120,6 @@ class HttpRequest{
                     if (strcasecmp(method, "GET")!=0&&strcasecmp(method, "POST")!=0) {
                         status_code = STATUS_CODE_BAD_REQ;
                         status_msg = STATUS_MSG_BAD_REQ;
-                        // set_file_path(bad_req_html);
                         return -2;
                     }
                        
@@ -169,7 +166,7 @@ class HttpRequest{
                     parse_ptr     = pos+1;
                     version       = parse_ptr;
                     *end          = '\0';
-                    printf("VERSION: %s\n", version);
+                    // printf("VERSION: %s\n", version);
                     if (strcasecmp(version, "HTTP/1.1")!=0) {
                         // set_file_path(not_supp_html);
                         status_code = STATUS_CODE_NOT_SUPP;
@@ -235,20 +232,19 @@ class HttpRequest{
             parse_ptr    =  recv_buf;
             bufsize_left =  BUFSIZE;
             state        =  PARSE_REQUESTLINE;
-            printf("%p~~~%p %d\n", recv_buf, recv_buf+BUFSIZE, sock);
+            // printf("%p~~~%p %d\n", recv_buf, recv_buf+BUFSIZE, sock);
             memset(recv_buf, 0, sizeof(recv_buf));
             while (1) {
                 int nr = recv(sock, recv_ptr, bufsize_left, 0);
                 if (nr==-1) {
-                    printf("243\n");
+                    // printf("243\n");
                     // close(sock);
                     return -1;
                 } else if (nr==0){
-                    printf("247\n");
+                    // printf("247\n");
                     // close(sock);
                     return -1;
                 } else if (nr>0){
-                    printf("%s~\n", recv_ptr);
                     bufsize_left -= nr;
                     recv_ptr += nr;
                     int ret = parse();
@@ -305,7 +301,7 @@ class HttpRequest{
                         printf("%s\n", strerror(errno));
                     }
                     req_file_size = req_file_stat.st_size;
-                    printf("&&&&&&\n");
+                    // printf("&&&&&&\n");
                 }                            
                 
             }
@@ -451,7 +447,7 @@ class Task{
     }    
 
     int operator()() {
-        printf("()...\n");
+        // printf("()...\n");
         int ret = callback(msock);
         if (-1==Epoll_mod_out(msock)) {
             printf("fail to add client_fd OUT: %s!\n", strerror(errno));
