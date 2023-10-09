@@ -96,11 +96,11 @@ class ThreadPool{
                 p_threadpool->Lock();
                 while (p_threadpool->task_queue.empty())
                     p_threadpool->Wait();
-                T* task = p_threadpool->task_queue.front();
+                T& task = *(p_threadpool->task_queue.front());
                 p_threadpool->task_queue.pop();
                 p_threadpool->Unlock();
-                printf("peek one Task...\n");
-                (*task)();
+                // printf("peek one Task...\n");
+                task();
                 // T* task = nullptr;
                 // {
                 //     LockGuard lg(&(p_threadpool->mutex));
