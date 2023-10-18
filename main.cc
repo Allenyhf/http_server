@@ -12,68 +12,23 @@
 #include <sys/epoll.h>
 #include "task.hpp"
 #include "threadpool.h"
+#include "my_epoll.hpp"
 
-#define BACKLOG 10000
 #define ERR_EXIT(msg) (perror(msg), exit(EXIT_FAILURE))
-#define MAX_EVENTS 10000
+#define BACKLOG     10000
+#define MAX_EVENTS  10000
+#define MAX_TASKS   10000
 
 int epollfd = 0;
-Task tasks[10000];
+Task tasks[MAX_TASKS];
 int task_nr = 0;
-int wflags[10000];
+// int wflags[10000];
 
 int Set_fd_nonblock(int fd) {
     int flags = fcntl(fd, F_GETFL);
     return fcntl(fd, F_SETFL, flags|O_NONBLOCK);
 }
 
-int Epoll_add_in(int fd, int one_shot) {
-    struct epoll_event ev;
-    memset(&ev, 0, sizeof(struct epoll_event));
-    ev.events = EPOLLIN; // leverl trigger
-    if (one_shot) ev.events |= EPOLLONESHOT;
-    ev.data.fd = fd;
-    return epoll_ctl(epollfd, EPOLL_CTL_ADD, fd, &ev);
-}
-
-int Epoll_add_out(int fd, void* ptr, int one_shot) {
-    struct epoll_event ev;
-    memset(&ev, 0, sizeof(struct epoll_event));
-    ev.events = EPOLLOUT; // leverl trigger
-    if (one_shot) ev.events |= EPOLLONESHOT;
-    ev.data.fd = fd;
-    ev.data.ptr = ptr;
-    // printf("OUT fd: %d\n", fd);
-    return epoll_ctl(epollfd, EPOLL_CTL_ADD, fd, &ev);
-}
-
-int Epoll_add_io(int fd) {
-    struct epoll_event ev;
-    memset(&ev, 0, sizeof(struct epoll_event));
-    ev.events = EPOLLIN|EPOLLOUT; // leverl trigger
-    ev.data.fd = fd;
-    return epoll_ctl(epollfd, EPOLL_CTL_ADD, fd, &ev);
-}
-
-// int Epoll_mod_out(int fd) {
-//     struct epoll_event ev;
-//     memset(&ev, 0, sizeof(struct epoll_event));
-//     ev.events = EPOLLOUT; // leverl trigger
-//     ev.data.fd = fd;
-//     return epoll_ctl(epollfd, EPOLL_CTL_MOD, fd, &ev);
-// }
-
-int Epoll_mod_in(int fd) {
-    struct epoll_event ev;
-    memset(&ev, 0, sizeof(struct epoll_event));
-    ev.events = EPOLLIN; // leverl trigger
-    ev.data.fd = fd;
-    return epoll_ctl(epollfd, EPOLL_CTL_MOD, fd, &ev);
-}
-
-int Epoll_del_fd(int fd) {
-    return epoll_ctl(epollfd, EPOLL_CTL_DEL, fd, NULL);
-}
 
 // ./server ip port
 int main(int argc, char** argv) {
@@ -123,7 +78,7 @@ int main(int argc, char** argv) {
     threadpool.Init();
     printf("http server start running...\n");
     printf("strlen: %d\n", strlen("GET\n"));
-    memset(wflags, 0, sizeof(wflags));
+    // memset(wflags, 0, sizeof(wflags));
     // int wcount = 0;
     while (1) {
         int nfds = epoll_wait(epollfd, events, MAX_EVENTS, -1);
@@ -151,6 +106,7 @@ int main(int argc, char** argv) {
                         printf("fail to add client fd IN!\n");
                         continue;
                     }
+                    // memset(&tasks[cli_fd], 0, sizeof(Task));
                     tasks[cli_fd].init(cli_fd);
                     // printf("accept fd: %d\n", cli_fd);
                     // if (-1==tasks[task_nr++]()) {
@@ -210,14 +166,14 @@ int main(int argc, char** argv) {
                 //     nr_to_send = 0;
                 // }
                 if (sockfd<0||sockfd>10000) continue;
-                if (sockfd!=listenfd && wflags[sockfd]==0) {
+                if (sockfd!=listenfd /*&& wflags[sockfd]==0*/) {
                     // sleep(5);
                     // Task& t = *((Task*)events[k].data.ptr);
                     Task& t = tasks[sockfd];
-                    wflags[sockfd] = 1;
+                    // wflags[sockfd] = 1;
                     // printf("fd: %d\n", sockfd);
                     t.write();
-                    wflags[sockfd] = 0;
+                    // wflags[sockfd] = 0;
                     if (-1==Epoll_del_fd(sockfd)) {
                         printf("fail to del events OUT!\n");
                     }
