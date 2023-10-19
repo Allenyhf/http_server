@@ -28,7 +28,7 @@ class EndPoint{
     HttpResponse http_response;
     int req_file_size;
     char* req_file_addr;
-    // char test_buf[1024];
+    char* send_ptr;
 
     int Send(int sock, char* buf, size_t size, int flags) {
         // printf("response size: %d sock: %d!\n", size, sock);
@@ -36,13 +36,18 @@ class EndPoint{
         while (size>0) {
             nr = send(sock, buf, size, 0);
             if (nr==-1) {
+                //log
                 printf("%s!\n", strerror(errno));
+                if (errno==EAGAIN) {
+                    return nr;
+                }
                 return -1;
             }
             buf += nr;
             size -= nr;
         }
-        return 0;
+        // return 0;
+        return nr;
     }
 
   public:
@@ -76,6 +81,9 @@ class EndPoint{
         }
         // printf("file: %s\n", req_file_addr);
         close(req_file_fd);
+
+        send_ptr = http_response.send_buf;
+        
         // printf("! wait to send response!\n");
         // memset(test_buf, 0, sizeof(test_buf));
         // strcpy(test_buf, "test...");
@@ -83,28 +91,76 @@ class EndPoint{
         return 0;
     }
 
-
-    void write(int sock) {
-        // printf("write sock:%d %s__%s\n", sock, http_response.send_buf, req_file_addr);
-        // printf("testbuf: %s\n", test_buf);
-        if (-1==Send(sock, http_response.send_buf, strlen(http_response.send_buf), 0)) {
-            printf("fail to send http response!\n");
-            return;
-        }
-
-        if (-1==Send(sock, req_file_addr, req_file_size, 0)) {
-            printf("fail to send request file!\n");
-            return;
-        }
-
-        if (req_file_addr==NULL) {
-            if (-1==munmap(req_file_addr, req_file_size)) {
-                printf("fail to munmap request file!\n");
+    int write(int sock) {
+        if (send_ptr>=req_file_addr) {
+            int to_send_nr = req_file_addr+req_file_size-send_ptr;
+            int sent_nr = Send(sock, send_ptr, to_send_nr, 0);
+            if (sent_nr<=-1) {//发送失败
+                return -1;
+            } else if (sent_nr<to_send_nr) {//不完全发送
+                send_ptr += sent_nr;
+                return 0;
+            } else if (sent_nr==to_send_nr) {//发送完毕
+                if (req_file_addr==NULL) {
+                    if (-1==munmap(req_file_addr, req_file_size)) {
+                        printf("fail to munmap request file!\n");
+                    }
+                }
+                memset(http_response.send_buf, 0, sizeof(http_response.send_buf));
+                return 1; 
+            }
+        } else {
+            int to_send_nr = http_response.send_buf+strlen(http_response.send_buf)-send_ptr;
+            int sent_nr = Send(sock, send_ptr, to_send_nr, 0);
+            if (sent_nr<=-1) {
+                return -1;
+            } else if (sent_nr<to_send_nr) {
+                send_ptr += sent_nr;
+                return 0;
+            } else if (sent_nr==to_send_nr) {
+                send_ptr = req_file_addr;
+                to_send_nr = req_file_size;
+                sent_nr = Send(sock, send_ptr, to_send_nr, 0);
+                if (sent_nr<=-1) {
+                    return -1;
+                } else if (sent_nr<to_send_nr) {
+                    send_ptr += sent_nr;
+                    return 0;
+                } else if (sent_nr==to_send_nr) {
+                    if (req_file_addr==NULL) {
+                        if (-1==munmap(req_file_addr, req_file_size)) {
+                            printf("fail to munmap request file!\n");
+                        }
+                    }
+                    memset(http_response.send_buf, 0, sizeof(http_response.send_buf));
+                    return 1; 
+                } 
+                return 1;
             }
         }
-        memset(http_response.send_buf, 0, sizeof(http_response.send_buf));
-        printf("write successfully!\n");
     }
+
+    // void write(int sock) {
+    //     // printf("write sock:%d %s__%s\n", sock, http_response.send_buf, req_file_addr);
+    //     // printf("testbuf: %s\n", test_buf);
+    //     if (-1==Send(sock, http_response.send_buf, strlen(http_response.send_buf), 0)) {
+    //         printf("fail to send http response!\n");
+    //         return;
+    //     }
+
+    //     if (-1==Send(sock, req_file_addr, req_file_size, 0)) {
+    //         printf("fail to send request file!\n");
+    //         return;
+    //     }
+
+    //     if (req_file_addr==NULL) {
+    //         if (-1==munmap(req_file_addr, req_file_size)) {
+    //             printf("fail to munmap request file!\n");
+    //         }
+    //     }
+    //     memset(http_response.send_buf, 0, sizeof(http_response.send_buf));
+    //     printf("write successfully!\n");
+    // }
 };
 
 /**
@@ -128,14 +184,34 @@ class Task{
         // printf("()...\n");
         // int ret = callback(msock);
         int ret = endpoint.process(msock);
-        if (-1==Epoll_mod_out(msock)) {
-            printf("fail to add client_fd OUT: %s!\n", strerror(errno));
+        int wr = endpoint.write(msock);
+        if (wr==-1) {
+            if (-1==Epoll_del_fd(msock)) {
+                printf("fail to del events OUT!\n");
+            }
+            close(msock);
+        } else if (wr==0) {
+            if (-1==Epoll_mod_out(msock)) {
+                printf("fail to add client_fd OUT: %s!\n", strerror(errno));
+            }
+        } else if (wr==1) {
+            if (-1==Epoll_del_fd(msock)) {
+                printf("fail to del events OUT!\n");
+            }
+            close(msock);
         }
+
+        // if (-1==Epoll_mod_out(msock)) {
+        //     printf("fail to add client_fd OUT: %s!\n", strerror(errno));
+        // }
         return ret;
     }
-
-    void write() {
+    int write() {
         endpoint.write(msock);
     }
+
+    // void write() {
+    //     endpoint.write(msock);
+    // }
 
 };

@@ -17,12 +17,11 @@
 #define ERR_EXIT(msg) (perror(msg), exit(EXIT_FAILURE))
 #define BACKLOG     10000
 #define MAX_EVENTS  10000
-#define MAX_TASKS   10000
+#define MAX_FD   65536
 
 int epollfd = 0;
-Task tasks[MAX_TASKS];
+Task tasks[MAX_FD];
 int task_nr = 0;
-// int wflags[10000];
 
 int Set_fd_nonblock(int fd) {
     int flags = fcntl(fd, F_GETFL);
@@ -72,14 +71,10 @@ int main(int argc, char** argv) {
     if (-1==Epoll_add_in(listenfd, 0)) {
         ERR_EXIT("fail to epoll_ctl_add listenfd!\n");
     }
-    // char recv_buf[1024], send_buf[1024];
     int nr_to_send = 0;
     ThreadPool<Task> threadpool(16);
     threadpool.Init();
     printf("http server start running...\n");
-    printf("strlen: %d\n", strlen("GET\n"));
-    // memset(wflags, 0, sizeof(wflags));
-    // int wcount = 0;
     while (1) {
         int nfds = epoll_wait(epollfd, events, MAX_EVENTS, -1);
         if (nfds==-1) {
@@ -106,84 +101,51 @@ int main(int argc, char** argv) {
                         printf("fail to add client fd IN!\n");
                         continue;
                     }
-                    // memset(&tasks[cli_fd], 0, sizeof(Task));
                     tasks[cli_fd].init(cli_fd);
-                    // printf("accept fd: %d\n", cli_fd);
-                    // if (-1==tasks[task_nr++]()) {
-                    //     close(cli_fd);
-                    //     task_nr--;
-                    // }
-                    // if (-1==Epoll_add_out(cli_fd, (void*)&tasks[task_nr], 1)) {
-                    //     printf("fail to add client_fd OUT!\n");
-                    // }
                 } else {
                     // printf("sockfd: %d can be read!\n", sockfd);
                     if (sockfd>0 && sockfd<MAX_EVENTS) {
-                        // printf("msock is %d!\n", tasks[sockfd].msock);
                         threadpool.addTask(&tasks[sockfd]);
-                        // if (-1==tasks[sockfd]()) {
-                        //     printf("close one client\n");
-                        //     // close(sockfd);
-                        // } else {
-                        //     if (-1==Epoll_mod_out(sockfd)) {
-                        //         printf("fail to mod client fd OUT!\n");
-                        //         printf("%s\n", strerror(errno));
-                        //     }
-                        // }
                     } else {
-                        printf("sockfd isn't valid!\n");
+                        //log
+                        // printf("sockfd isn't valid!\n");
                     }
-                    // memset(recv_buf, 0, sizeof(recv_buf));
-                    // int nr = recv(events[k].data.fd, recv_buf, sizeof(recv_buf), 0);
-                    // if (nr==-1) {
-                    //     ERR_EXIT("fail to recv from client!\n");
-                    // } else if (nr==0) {
-                    //     printf("client closed!\n");
-                    //     if (-1==Epoll_del_fd(events[k].data.fd)) {
-                    //         Epoll_del_fd(events[k].data.fd);
-                    //     }
-                    //     close(events[k].data.fd);
-                    //     continue;
-                    // } else if (nr>0) {
-                    //     printf("recv %d bytes: %s", nr, recv_buf);
-                    //     // printf("%d %d\n", buf[nr-2], buf[nr-1]);
-                    // }
-                    // if (-1==Epoll_mod_out(events[k].data.fd)) {
-                    //     printf("fail to add client_fd OUT!\n");
-                    // }
-                    // memset(send_buf, 0, sizeof(send_buf));
-                    // strncpy(send_buf, recv_buf, nr);
-                    // nr_to_send = nr;
                 }
             } else if (events[k].events & EPOLLOUT) {
-                // if (nr_to_send>0) {
-                //     int nr = send(events[k].data.fd, send_buf, nr_to_send, 0);
-                //     if (nr==-1) {
-                //         ERR_EXIT("fail to send to client!\n");
-                //     } else {
-                //         printf("send success: %d bytes!", nr);
-                //     }
-                //     nr_to_send = 0;
-                // }
                 if (sockfd<0||sockfd>10000) continue;
-                if (sockfd!=listenfd /*&& wflags[sockfd]==0*/) {
+                if (sockfd!=listenfd) {
                     // sleep(5);
-                    // Task& t = *((Task*)events[k].data.ptr);
                     Task& t = tasks[sockfd];
-                    // wflags[sockfd] = 1;
-                    // printf("fd: %d\n", sockfd);
-                    t.write();
-                    // wflags[sockfd] = 0;
+                    int wr = t.write();
+                    if (wr==-1) {
+                        if (-1==Epoll_del_fd(sockfd)) {
+                            printf("fail to del events OUT!\n");
+                        }
+                        close(sockfd);
+                    } else if (wr==0) {
+                        if (-1==Epoll_mod_out(sockfd)) {
+                            printf("fail to add client_fd OUT: %s!\n", strerror(errno));
+                        }
+                    } else if (wr==1) {
+                        if (-1==Epoll_del_fd(sockfd)) {
+                            printf("fail to del events OUT!\n");
+                        }
+                        close(sockfd);
+                    }
+                    // t.write();
+                    // if (-1==Epoll_del_fd(sockfd)) {
+                    //     printf("fail to del events OUT!\n");
+                    // }
+                    // close(sockfd);
+                }
+            } else if (events[k].events & (EPOLLERR|EPOLLHUP|EPOLLRDHUP)) {
+                //log
+                if (sockfd>0 && sockfd<MAX_FD){
                     if (-1==Epoll_del_fd(sockfd)) {
                         printf("fail to del events OUT!\n");
                     }
-                    // tasks[sockfd] = Task();
                     close(sockfd);
-                    // wcount += 1;
-                    // printf("%d\n", wcount);
-                }
-            } else if (events[k].events & (EPOLLERR|EPOLLHUP|EPOLLRDHUP)) {
-
+                } 
             }
         }
     }
