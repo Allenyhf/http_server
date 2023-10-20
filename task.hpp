@@ -122,7 +122,7 @@ class EndPoint{
                 return 0;
             } else if (sent_nr==to_send_nr && send_ptr>=req_file_addr) {
                 /* 阶段2发送完毕 */
-                if (req_file_addr==NULL) {
+                if (req_file_addr!=NULL) {
                     if (-1==munmap(req_file_addr, req_file_size)) {
                         printf("fail to munmap request file!\n");
                     }
@@ -294,6 +294,7 @@ class Task{
         // }
         return ret;
     }
+
     int write() {
         return endpoint.write(msock);
     }
