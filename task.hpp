@@ -56,6 +56,12 @@ class EndPoint{
         http_response.set_req_file_size(size);
     }
 
+    /**
+     * @brief 接收 HTTP Request并生成相应的 HTTP Response
+     * 
+     * @param sock 
+     * @return int  失败返回-1,成功返回0。
+     */
     int process(int sock) {
         // printf("recv&parse http request...\n");
         // if (-1==
@@ -81,16 +87,97 @@ class EndPoint{
         }
         // printf("file: %s\n", req_file_addr);
         close(req_file_fd);
-
         send_ptr = http_response.send_buf;
-        
         // printf("! wait to send response!\n");
-        // memset(test_buf, 0, sizeof(test_buf));
-        // strcpy(test_buf, "test...");
-        // printf("testbuf1: %s\n", test_buf);
         return 0;
     }
 
+    /**
+     * @brief 将 HTTP Response和请求文件 写入socket发送缓冲区
+     * 
+     * @param sock 
+     * @return int 若发送失败返回-1; 若不完全发送返回0；若完全发送返回1。
+     */
+    int write(int sock) {
+        while (1) {
+            int to_send_nr;
+            if (send_ptr>=req_file_addr && send_ptr<req_file_addr+req_file_size) {
+                /* 阶段2:发送请求文件 */
+                to_send_nr = req_file_addr+req_file_size-send_ptr;
+            } else if (send_ptr>=http_response.send_buf && send_ptr<http_response.send_buf+strlen(http_response.send_buf)) {
+                /* 阶段1:发送HTTP Response */
+                to_send_nr = http_response.send_buf+strlen(http_response.send_buf)-send_ptr;
+            } else {
+                /* 错误 */
+                return -1;
+            }
+
+            int sent_nr = Send(sock, send_ptr, to_send_nr, 0);
+            if (sent_nr<=-1) {
+                /* 发送失败 */
+                return -1;
+            } else if (sent_nr<to_send_nr) {
+                /* 不完全发送（发送缓冲区空间不足）*/
+                send_ptr += sent_nr;
+                return 0;
+            } else if (sent_nr==to_send_nr && send_ptr>=req_file_addr) {
+                /* 阶段2发送完毕 */
+                if (req_file_addr==NULL) {
+                    if (-1==munmap(req_file_addr, req_file_size)) {
+                        printf("fail to munmap request file!\n");
+                    }
+                }
+                memset(http_response.send_buf, 0, sizeof(http_response.send_buf));
+                return 1; 
+            } else if (sent_nr==to_send_nr) {
+                /* 阶段1发送完毕 */
+                //转入发送阶段2:发送请求文件
+                send_ptr = req_file_addr;
+                //继续循环
+            }
+        }
+        return 0;
+    }
+
+/*
+    int write(int sock) {
+        while (1) {
+            //阶段2:发送请求文件
+            if (send_ptr>=req_file_addr) {
+                int to_send_nr = req_file_addr+req_file_size-send_ptr;
+                int sent_nr = Send(sock, send_ptr, to_send_nr, 0);
+                if (sent_nr<=-1) {//发送失败
+                    return -1;
+                } else if (sent_nr<to_send_nr) {//不完全发送（发送缓冲区空间不足）
+                    send_ptr += sent_nr;
+                    return 0;
+                } else if (sent_nr==to_send_nr) {//发送完毕
+                    if (req_file_addr==NULL) {
+                        if (-1==munmap(req_file_addr, req_file_size)) {
+                            printf("fail to munmap request file!\n");
+                        }
+                    }
+                    memset(http_response.send_buf, 0, sizeof(http_response.send_buf));
+                    return 1; 
+                }
+            } else {
+            //阶段1:发送HTTP Response
+                int to_send_nr = http_response.send_buf+strlen(http_response.send_buf)-send_ptr;
+                int sent_nr = Send(sock, send_ptr, to_send_nr, 0);
+                if (sent_nr<=-1) {
+                    return -1;
+                } else if (sent_nr<to_send_nr) {
+                    send_ptr += sent_nr;
+                    return 0;
+                } else if (sent_nr==to_send_nr) {
+                    send_ptr = req_file_addr;   
+                }
+            }
+        }
+        return 0;
+    }
+*/
+    /*
     int write(int sock) {
         if (send_ptr>=req_file_addr) {
             int to_send_nr = req_file_addr+req_file_size-send_ptr;
@@ -139,6 +226,7 @@ class EndPoint{
             }
         }
     }
+    */
 
     // void write(int sock) {
     //     // printf("write sock:%d %s__%s\n", sock, http_response.send_buf, req_file_addr);
@@ -207,7 +295,7 @@ class Task{
         return ret;
     }
     int write() {
-        endpoint.write(msock);
+        return endpoint.write(msock);
     }
 
     // void write() {

@@ -71,7 +71,6 @@ int main(int argc, char** argv) {
     if (-1==Epoll_add_in(listenfd, 0)) {
         ERR_EXIT("fail to epoll_ctl_add listenfd!\n");
     }
-    int nr_to_send = 0;
     ThreadPool<Task> threadpool(16);
     threadpool.Init();
     printf("http server start running...\n");
